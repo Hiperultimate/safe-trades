@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import authenticationRouter from "./router/authentication";
+import tradeRouter from "./router/trades";
 
 const app = express();
 const port = 3000;
@@ -12,7 +13,8 @@ app.get("/", (req, res) => {
   res.send("Backend healthy...");
 });
 
-app.use("/api/v1" , authenticationRouter);
+app.use("/api/v1", authenticationRouter);
+app.use("/api/v1", tradeRouter);
 
 
 app.listen(port, () => {
