@@ -1,0 +1,19 @@
+{
+  "name": "price_pooler",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "bun index"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "decimal.js": "^10.6.0",
+    "redis": "^5.8.2"
+  }
+}

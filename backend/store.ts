@@ -1,0 +1,2 @@
+export const validOTP :Record<string, string>= {}; // email : otp
+export const registeredEmails : Record<string, boolean> = {}; // email : true -> Later on we can use user specific data instead of bool
