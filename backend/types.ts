@@ -12,7 +12,8 @@ export enum Operations {
     GetBalanceUsd = "get-balance-usd",
     GetBalance = "get-balance",
     SupportedAssets = "supported-assets",
-    PriceUpdate = "price-update"
+    PriceUpdate = "price-update",
+    UserRegister = "user-register"
 }
 
 // Names of two redis streams we are using

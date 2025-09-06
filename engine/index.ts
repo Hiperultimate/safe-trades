@@ -1,5 +1,5 @@
 import redisClient from "./redis/redisClient";
-import { prices } from "./store";
+import { balance, prices } from "./store";
 import { Operations, TRADE_STREAM } from "./types";
 
 async function main() {
@@ -52,6 +52,11 @@ async function main() {
     }
 
     if (operationName === Operations.SupportedAssets) {
+    }
+
+    if (operationName === Operations.UserRegister) {
+      const userEmail = operationPayload.userEmail;
+      balance[userEmail] = { USD: { balance: 10_000, decimal: 0 } };
     }
   }
 }

@@ -8,4 +8,5 @@ export enum Operations {
   GetBalance = "get-balance",
   SupportedAssets = "supported-assets",
   PriceUpdate = "price-update",
+  UserRegister = "user-register",
 }

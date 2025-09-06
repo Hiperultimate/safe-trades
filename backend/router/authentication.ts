@@ -3,6 +3,8 @@ import { registeredEmails } from "../store";
 import jwt from "jsonwebtoken";
 import { USER_SCHEMA } from "../schema";
 import { sendAuthMail } from "../mail/sendMail";
+import client from "../redisClient";
+import { Operations, TRADE_STREAM } from "../types";
 
 const authenticationRouter = express.Router();
 
@@ -16,8 +18,15 @@ authenticationRouter.post("/signup", async (req, res) => {
 
   const validEmail = isValidEmail.data!.email;
 
+  if (registeredEmails[validEmail]) {
+    res.status(400).send({ message: "User already has an account" });
+  }
+
   // Registering user to DB 
   registeredEmails[validEmail] = true;
+
+  // Initialize dummy balance to the user on engine
+  await client.xAdd(TRADE_STREAM, "*", {message : JSON.stringify({operation: Operations.UserRegister ,userEmail : validEmail})})
 
   const authToken = jwt.sign({ email: email }, process.env.JWT_KEY!);
 
