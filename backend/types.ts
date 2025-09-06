@@ -1,3 +1,5 @@
+import type { Request } from "express";
+
 export type ICreatePayload = {
     asset: string,
     type: "long" | "short",
@@ -5,6 +7,10 @@ export type ICreatePayload = {
     leverage: number,
     slippage: number
 };
+
+export interface AuthenticatedRequest extends Request {
+  userEmail: string;
+}
 
 export enum Operations {
     CreateTrade = "create-trade",

@@ -13,6 +13,7 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "decimal.js": "^10.6.0",
     "redis": "^5.8.2"
   }
 }

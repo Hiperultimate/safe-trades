@@ -1,16 +1,19 @@
 import express, { type Request, type Response } from "express";
 import auth from "../middleware/authMiddleware";
-import { TRADE_STREAM, Operations, type ICreatePayload } from "../types";
+import { TRADE_STREAM, Operations, type ICreatePayload, type AuthenticatedRequest } from "../types";
 import { CreateTradeSchema } from "../schema";
 import z from "zod";
 import redisClient from "../redisClient";
+import { registeredEmails } from "../store";
 
 const tradeRouter = express.Router();
 
 // save no states here
 // we are just sending requests to the redis streams
-tradeRouter.post("/trade/create", auth, async (req: Request<{}, {}, ICreatePayload>, res : Response<{ message: string } | {orderId : string}>) => {
-    const { asset, type, margin, leverage, slippage } = req.body;
+tradeRouter.post("/trade/create", auth, async (req, res : Response<{ message: string } | {orderId : string}>) => {
+    const typedReq = req as AuthenticatedRequest & { body: ICreatePayload };
+    const { asset, type, margin, leverage, slippage } = typedReq.body;
+    const email = typedReq.userEmail;
     // Create a request payload to send to the redis stream
 
     const zodValidation = CreateTradeSchema.safeParse({ asset, type, margin, leverage, slippage });
@@ -26,10 +29,11 @@ tradeRouter.post("/trade/create", auth, async (req: Request<{}, {}, ICreatePaylo
     const payload = {
         operation: Operations.CreateTrade,
         id,
+        email,
         asset: validData.asset,
         type: validData.type,
-        margin: validData.margin, // decimal is 2, so this means 500$
-        leverage: validData.leverage, // so the user is trying to buy $5000 of exposure
+        margin: validData.margin,
+        leverage: validData.leverage,
         slippage: validData.slippage, // in bips, so this means 1%	
     };
 
@@ -73,7 +77,7 @@ tradeRouter.post("/trade/close", auth, (req: Request<{}, {}, { id: string }>, re
 
 })
 
-tradeRouter.get("/balance/usd", auth, (req: Request<{}, {}, {}, {email : string}>, res: Response<{ message: string } | {balance : number}>) => {
+tradeRouter.get("/balance/usd", auth, async (req: Request<{}, {}, {}, {email : string}>, res: Response<{ message: string } | {balance : number}>) => {
     const { email } = req.query;
     const zodValidation = z.email().safeParse(email);
 
@@ -84,12 +88,19 @@ tradeRouter.get("/balance/usd", auth, (req: Request<{}, {}, {}, {email : string}
 
     const validEmail = zodValidation.data;
 
+    if (!registeredEmails[validEmail]) {
+        res.status(400).send({ message: "Email not found..." });
+    }
+
     const payload = {
         operation: Operations.GetBalanceUsd,
         email: validEmail,
     };
 
+    const id = Bun.randomUUIDv7();
     // Send payload to redis stream
+    await redisClient.xAdd(TRADE_STREAM, "*", {message : JSON.stringify({operation: Operations.GetBalanceUsd, id ,userEmail : validEmail})})
+
 
     // const payloadResponse = await transactionWatch(id);
     const payloadResponse = 20000;
