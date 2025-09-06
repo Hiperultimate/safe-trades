@@ -41,12 +41,12 @@ ws.onclose = (message) => {
 setInterval(async () => {
   const tokens = Object.keys(aggregateToken);
   const prices = tokens.map((assetName) => ({
-    operation: Operations.PriceUpdate,
     asset: assetName,
     price: aggregateToken[assetName]!,
     decimal: TOKEN_DECIMALS[assetName]!,
   }));
   const payload = {
+    operation: Operations.PriceUpdate,
     price_updates: prices,
   };
   console.log(payload);
