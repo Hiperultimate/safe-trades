@@ -31,8 +31,6 @@ ws.onmessage = (event) => {
   const decimals = TOKEN_DECIMALS[tokenName] as number;
 
   aggregateToken[tokenName] = tokenPrice.mul(decimals).toNumber();
-
-  // console.log("Parsed data :", parsedData)
 };
 
 ws.onclose = (message) => {
@@ -54,7 +52,6 @@ setInterval(async () => {
   console.log(payload);
   // redisClient.publish("asset_prices", JSON.stringify(payload));
 
-  // 
   await redisClient.xAdd(TRADE_STREAM, "*", {
     message: JSON.stringify(payload),
   });
