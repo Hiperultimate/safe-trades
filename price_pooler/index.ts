@@ -13,9 +13,9 @@ const subscribetoken = {
 };
 
 const TOKEN_DECIMALS: Record<string, number> = {
-  SOL_USDC: 2,
-  ETH_USDC: 2,
-  BTC_USDC: 1,
+  SOL_USDC: 6,
+  ETH_USDC: 6,
+  BTC_USDC: 4,
 };
 
 ws.onopen = () => {
@@ -29,8 +29,8 @@ ws.onmessage = (event) => {
   const tokenPrice = new Decimal(parsedData.data.b);
   const tokenName = parsedData.data.s;
   const decimals = TOKEN_DECIMALS[tokenName] as number;
-
-  aggregateToken[tokenName] = tokenPrice.mul(decimals).toNumber();
+  const priceExcludingDecimal = tokenPrice.mul(new Decimal(10).toPower(decimals)).toNumber();
+  aggregateToken[tokenName] = priceExcludingDecimal;
 };
 
 ws.onclose = (message) => {
