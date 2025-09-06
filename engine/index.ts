@@ -98,8 +98,8 @@ async function main() {
           [asset]: {
             balance:
               balance[email]?.[asset] !== undefined ? 
-                quantity.mul(new Decimal(currentPrice.decimal)).plus(new Decimal(balance[email][asset].balance)).toNumber() :
-                quantity.mul(new Decimal(currentPrice.decimal)).toNumber(),
+                quantity.mul(new Decimal(currentPrice.decimal).mul(Decimal(10).pow(currentPrice.decimal))).plus(new Decimal(balance[email][asset].balance)).toNumber() :
+                quantity.mul(new Decimal(currentPrice.decimal).mul(Decimal(10).pow(currentPrice.decimal))).toNumber(),
             decimal: currentPrice.decimal
           }
         };
@@ -143,7 +143,7 @@ async function main() {
         const existingAssetBalance = new Decimal(
           balance[email]?.[asset]?.balance ?? 0
         );
-        const newAssetBalance = existingAssetBalance.sub(quantity).toNumber();
+        const newAssetBalance = existingAssetBalance.sub(quantity.mul(Decimal(10).pow(currentPrice.decimal))).toNumber();
 
         balance[email] = {
           ...balance[email],
@@ -159,6 +159,80 @@ async function main() {
     }
 
     if (operationName === Operations.CloseTrade) {
+      const { id, email } = operationPayload;
+
+      const getOrderDetails = open_orders[email]?.find(order => order.id === id);
+      if (!getOrderDetails) {
+        console.error("Unable to find order");
+        // send error through callback queue
+        return
+      }
+
+      const {
+        type,
+        entryPrice,
+        quantity,
+        margin,
+        leverage,
+        borrowed,
+        slippage,
+        asset,
+        createdAt,
+      } = getOrderDetails;
+
+      const currentPrice = prices[asset];
+      if (!currentPrice) {
+        console.error("Invalid asset price");
+        return;
+      }
+
+      // Calculate the execution price considering slippage
+      const executionPrice =
+        type === "long"
+          ? currentPrice.price * (1 + slippage / 100)
+          : currentPrice.price * (1 - slippage / 100);
+
+      // Calculate the PnL
+      let pnl = 0;
+      if (type === "long") {
+        pnl = (executionPrice - entryPrice) * quantity * leverage;
+      } else{
+        pnl = (entryPrice - executionPrice) * quantity * leverage;
+      }
+
+      // Update the USD balance
+      const userBalanceUsd = balance[email]?.USD;
+      if (!userBalanceUsd) {
+        console.error("User USD balance not found");
+        return;
+      }
+
+      const newUsdBalance = userBalanceUsd.balance + pnl;
+
+      // Update the asset balance
+      const existingAssetBalance = balance[email]?.[asset]?.balance || 0;
+      const newAssetBalance =
+        existingAssetBalance - quantity * currentPrice.decimal;
+
+      // Update the user's balances
+      balance[email] = {
+        ...balance[email],
+        USD: { balance: newUsdBalance, decimal: 0 },
+        [asset]: {
+          balance: newAssetBalance,
+          decimal: currentPrice.decimal,
+        },
+      };
+
+      // Remove the closed position from open_orders
+      if (!open_orders[email]) {
+        console.log(`Orders for user ${email} not found`);
+        return;
+      }
+      open_orders[email] = open_orders[email]?.filter(
+        (order) => order.id !== id
+      );
+
     }
 
     if (operationName === Operations.GetBalanceUsd) {

@@ -10,3 +10,18 @@ export enum Operations {
   PriceUpdate = "price-update",
   UserRegister = "user-register",
 }
+
+export type IPosition = {
+  id: string;
+  owner: string;
+  asset: string;
+  type: "long" | "short";
+  entryPrice: number;
+  quantity: number;
+  margin: number;
+  leverage: number;
+  positionSize: number;
+  borrowed: number;
+  slippage: number;
+  createdAt: number;
+};
