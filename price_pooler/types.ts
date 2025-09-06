@@ -12,3 +12,16 @@ export type IBookTickerResponse = {
     },
     stream : string // eg :- bookTicker.SOL_USDC
 }
+
+
+export enum Operations {
+  CreateTrade = "create-trade",
+  CloseTrade = "close-trade",
+  GetBalanceUsd = "get-balance-usd",
+  GetBalance = "get-balance",
+  SupportedAssets = "supported-assets",
+  PriceUpdate = "price-update",
+}
+
+// Redis stream
+export const TRADE_STREAM = "trade-stream";

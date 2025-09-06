@@ -11,7 +11,10 @@ export enum Operations {
     CloseTrade = "close-trade",
     GetBalanceUsd = "get-balance-usd",
     GetBalance = "get-balance",
-    SupportedAssets = "supported-assets"
+    SupportedAssets = "supported-assets",
+    PriceUpdate = "price-update"
 }
 
-
+// Names of two redis streams we are using
+export const TRADE_STREAM = "trade-stream";
+export const CALLBACK_QUEUE = "callback-queue";

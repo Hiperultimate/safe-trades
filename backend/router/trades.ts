@@ -1,14 +1,15 @@
 import express, { type Request, type Response } from "express";
 import auth from "../middleware/authMiddleware";
-import { Operations, type ICreatePayload } from "../types";
+import { TRADE_STREAM, Operations, type ICreatePayload } from "../types";
 import { CreateTradeSchema } from "../schema";
 import z from "zod";
+import redisClient from "../redisClient";
 
 const tradeRouter = express.Router();
 
 // save no states here
 // we are just sending requests to the redis streams
-tradeRouter.post("/trade/create", auth, (req: Request<{}, {}, ICreatePayload>, res : Response<{ message: string } | {orderId : string}>) => {
+tradeRouter.post("/trade/create", auth, async (req: Request<{}, {}, ICreatePayload>, res : Response<{ message: string } | {orderId : string}>) => {
     const { asset, type, margin, leverage, slippage } = req.body;
     // Create a request payload to send to the redis stream
 
@@ -33,6 +34,8 @@ tradeRouter.post("/trade/create", auth, (req: Request<{}, {}, ICreatePayload>, r
     };
 
     // Send payload to redis stream
+    await redisClient.xAdd(TRADE_STREAM, "*", { message : JSON.stringify(payload)});
+    
 
     // Watch second redis stream until some response is given about the transaction id
     // const payloadResponse = await transactionWatch(id);
