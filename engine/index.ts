@@ -157,6 +157,9 @@ async function main() {
         open_orders[email]?.push(openPosition);
       }
 
+      await redisClient.xAdd(CALLBACK_QUEUE, "*", {
+        message: JSON.stringify({ id }),
+      });
       console.log(`CreateTrade result : ${id}`);
     }
 
@@ -236,6 +239,9 @@ async function main() {
       );
 
       console.log(`CloseTrade result : ${id}`);
+      await redisClient.xAdd(CALLBACK_QUEUE, "*", {
+        message: JSON.stringify({ id }),
+      });
     }
 
     if (operationName === Operations.GetBalanceUsd) {
@@ -256,7 +262,7 @@ async function main() {
       await redisClient.xAdd(CALLBACK_QUEUE, "*", {
         message: JSON.stringify(payload),
       });
-      console.log(`GetBalance result : ${payload}`);
+      console.log(`GetBalance result : ${JSON.stringify(payload)}`);
       continue;
     }
 

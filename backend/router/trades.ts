@@ -43,19 +43,22 @@ tradeRouter.post("/trade/create", auth, async (req, res : Response<{ message: st
     // Send payload to redis stream
     await redisClient.xAdd(TRADE_STREAM, "*", { message : JSON.stringify(payload)});
     
-
-    // Watch second redis stream until some response is given about the transaction id
-    // const payloadResponse = await transactionWatch(id);
-    const payloadResponse = true;
-
-    // If success
-    if(!payloadResponse) return res.status(400).send({message : "Transaction creation un-successful"})
-    res.status(200).send({ orderId: id });
+    try {
+      const result = (await redisSubscriber.waitForMessage(id)) as {
+        id: string;
+      };
+      return res.status(200).send({ orderId : result.id });
+    } catch (error) {
+      console.log("Some error occured : ", error);
+        return res.status(400).send({message : "Transaction creation un-successful"})
+    }
 })
 
-tradeRouter.post("/trade/close", auth, (req: Request<{}, {}, { id: string }>, res: Response<{ message: string } | {orderId : string}>) => {
+tradeRouter.post("/trade/close", auth, async (req: Request<{}, {}, { id: string }>, res: Response<{ message: string } | {orderId : string}>) => {
+    const typedReq = req as AuthenticatedRequest & { body: {id : string} };
     const { id } = req.body;
     const zodValidation = z.uuidv7().safeParse(id);
+    const email = typedReq.userEmail;
 
     if (!zodValidation.success) {
       console.log("Error :", zodValidation.error.message);
@@ -66,18 +69,27 @@ tradeRouter.post("/trade/close", auth, (req: Request<{}, {}, { id: string }>, re
 
     const payload = {
         operation: Operations.CloseTrade,
+        email,
         id: validId,
     };
 
     // Send payload to redis stream
+    await redisClient.xAdd(TRADE_STREAM, "*", {
+      message: JSON.stringify(payload),
+    });
 
-    // const payloadResponse = await transactionWatch(id);
-    const payloadResponse = true;
-
-    // If success
-    if(!payloadResponse) return res.status(400).send({message : "Transaction close un-successful"})
-    res.status(200).send({ orderId: validId });
-
+    try {
+      const result = (await redisSubscriber.waitForMessage(id)) as {
+        id: string;
+      };
+        return res.status(200).send({ orderId: result.id });
+        
+    } catch (error) {
+      console.log("Some error occured : ", error);
+      return res
+        .status(400)
+        .send({ message: "Transaction close un-successful" });
+    }
 })
 
 tradeRouter.get("/balance/usd", auth, async (req: Request<{}, {}, {}, {email : string}>, res: Response<{ message: string } | {balance : number}>) => {
@@ -95,33 +107,29 @@ tradeRouter.get("/balance/usd", auth, async (req: Request<{}, {}, {}, {email : s
         res.status(400).send({ message: "Email not found..." });
     }
 
-    const payload = {
-        operation: Operations.GetBalanceUsd,
-        email: validEmail,
-    };
-
-    const id = Bun.randomUUIDv7();
-    // Send payload to redis stream
     
-    await redisClient.xAdd(TRADE_STREAM, "*", { message: JSON.stringify({ operation: Operations.GetBalanceUsd, id, userEmail: validEmail }) })
+    const id = Bun.randomUUIDv7();
+    const payload = {
+      operation: Operations.GetBalanceUsd,
+      id,
+      userEmail: validEmail,
+    };
+    
+    await redisClient.xAdd(TRADE_STREAM, "*", { message: JSON.stringify(payload) })
 
     try {
-        const result = await redisSubscriber.waitForMessage(id);
-        console.log("Getting result :", result);
+        const result = (await redisSubscriber.waitForMessage(id)) as {
+          id: string;
+          balance: { USD: { balance: number; decimal: number } };
+        };
+        return res.status(200).send({ balance : result.balance.USD.balance})
     } catch (error) {
         console.log("Some error occured : ", error);
+        return res.status(400).send({ message: "Unable to fetch user balance" });
     }
-
-    // const payloadResponse = await redisSubscriber(id);
-    const payloadResponse = 20000;
-
-    // If success
-    if (!payloadResponse)
-    return res.status(400).send({ message: "Unable to fetch user balance" });
-    res.status(200).send({ balance: payloadResponse }); // here payloadResponse should be a number denoting user balance
 });
 
-tradeRouter.get("/balance", auth, (req: Request<{}, {}, {}, { email: string }>, res: Response<{ message: string } | { [assetName: string]: {balance : number, decimals: number} }>) => {
+tradeRouter.get("/balance", auth, async (req: Request<{}, {}, {}, { email: string }>, res) => {
     const { email } = req.query;
     const zodValidation = z.email().safeParse(email);
 
@@ -132,48 +140,52 @@ tradeRouter.get("/balance", auth, (req: Request<{}, {}, {}, { email: string }>, 
 
     const validEmail = zodValidation.data;
 
+    const id = Bun.randomUUIDv7();
     const payload = {
         operation: Operations.GetBalance,
-        email: validEmail,
+        id,
+        userEmail: validEmail,
     };
 
     // Send payload to redis stream
+    await redisClient.xAdd(TRADE_STREAM, "*", {
+      message: JSON.stringify(payload),
+    });
 
-    // const payloadResponse = await transactionWatch(id);
-    const payloadResponse = {
-      BTC: {
-        balance: 10000000,
-        decimals: 4,
-      },
-    };
-
-    // If success
-    if (!payloadResponse)
-    return res.status(400).send({ message: "Unable to fetch user balance" });
-    res.status(200).send(payloadResponse); // here payloadResponse should be a number denoting user balance
+    try {
+      const result = (await redisSubscriber.waitForMessage(id)) as {
+        id: string;
+        balance: { [assetName : string]: { balance: number; decimal: number } };
+      };
+      return res.status(200).send(result.balance);
+    } catch (error) {
+      console.log("Some error occured : ", error);
+      return res.status(400).send({ message: "Unable to fetch user balance" });
+    }
 });
 
-tradeRouter.get("/supportedAssets", (req, res) => {
+tradeRouter.get("/supportedAssets", async (_req, res) => {
+    const id = Bun.randomUUIDv7();
     const payload = {
-        operation : Operations.SupportedAssets
+        operation : Operations.SupportedAssets,
+        id
     }
 
     // Send payload to redis stream
+    await redisClient.xAdd(TRADE_STREAM, "*", {
+        message: JSON.stringify(payload),
+    });
 
-    const payloadResponse = {
-      assets: [
-        {
-          symbol: "BTC",
-          name: "Bitcoin",
-          imageUrl: "image.com/png",
-        },
-      ],
-    };
-
-    if (!payloadResponse)
-        return res.status(400).send({ message: "Unable to fetch supported assets" });
-    res.status(200).send(payloadResponse); // here payloadResponse should be a number denoting user balance
-
+    try {
+      const result = (await redisSubscriber.waitForMessage(id)) as {
+        id: string;
+        assets: string[];
+      };
+      return res.status(200).send(result.assets);
+    } catch (error) {
+      console.log("Some error occured : ", error);
+      return res.status(400).send({ message: "Unable to fetch supported assets" });
+    }
 });
 
 export default tradeRouter;
