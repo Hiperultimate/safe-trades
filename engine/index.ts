@@ -108,8 +108,6 @@ async function main() {
           }
         };
 
-        console.log(`Checking balance stored : ${JSON.stringify(balance[email])} : quantity = ${quantity.toNumber()}`);
-
         // Add it in open_orders array
         open_orders[email]?.push(openPosition);
       } else {
@@ -123,8 +121,10 @@ async function main() {
         const executionPrice = new Decimal(currentPrice.price)
           .div(new Decimal(10).pow(new Decimal(currentPrice.decimal)))
           .mul(new Decimal(1).minus(new Decimal(slippage).div(100)));
-        const quantity = new Decimal(positionSize).div(executionPrice);
+        let quantity = new Decimal(positionSize).div(executionPrice);
+        quantity = quantity.mul(Decimal(10).pow(currentPrice.decimal));
         const borrowed = new Decimal(positionSize).sub(new Decimal(margin));
+
 
         const openPosition = {
           id,
@@ -143,13 +143,13 @@ async function main() {
 
         const newUsdBalance = new Decimal(userBalanceUsd.balance)
           .sub(new Decimal(margin))
-          .plus(positionSize)
           .toNumber();
 
         const existingAssetBalance = new Decimal(
           balance[email]?.[asset]?.balance ?? 0
         );
-        const newAssetBalance = existingAssetBalance.sub(quantity.mul(Decimal(10).pow(currentPrice.decimal))).toNumber();
+        // existingAssetQty - qty * (10 ** 4)
+        const newAssetBalance = existingAssetBalance.sub(quantity).toNumber();
 
         balance[email] = {
           ...balance[email],
@@ -225,19 +225,10 @@ async function main() {
       const totalAssetPrice = margin + pnl;
 
       // Asset Quantity is balance
-      const newUserBalanceUsd = type === "long" ? userBalanceUsd.balance + totalAssetPrice : userBalanceUsd.balance - totalAssetPrice;
+      const newUserBalanceUsd = userBalanceUsd.balance + totalAssetPrice;
       const oldUserAssetBalance = balance[email]?.[asset]?.balance || 0;
       const assetBalanceAfterTx = type === "long" ? oldUserAssetBalance - quantityND : oldUserAssetBalance + quantityND;
       
-      console.log("Checking variable data : ", {
-        quantity,
-        pnl,
-        currentAssetPrice,
-        totalAssetPrice : totalAssetPrice,
-        oldUserAssetBalance : oldUserAssetBalance,
-        assetBalanceAfterTx : assetBalanceAfterTx,
-      });
-
       // Update the user's balances
       balance[email] = {
         ...balance[email],
@@ -248,8 +239,6 @@ async function main() {
         },
       };
 
-      // console.log(`Checking balances : usd balance : ${newUsdBalance} : pnl : ${pnl} : existing : ${existingAssetBalance} : new balance : ${newAssetBalance}` )
-      console.log(`Checking balances : usd balance : ${newUserBalanceUsd} : pnl : ${pnl} ` )
 
       // Remove the closed position from open_orders
       if (!open_orders[email]) {
