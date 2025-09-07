@@ -3,10 +3,13 @@ import auth from "../middleware/authMiddleware";
 import { TRADE_STREAM, Operations, type ICreatePayload, type AuthenticatedRequest } from "../types";
 import { CreateTradeSchema } from "../schema";
 import z from "zod";
-import redisClient from "../redisClient";
+import redisClient from "../redis/redisClient";
 import { registeredEmails } from "../store";
+import RedisSubscriber from "../redisSubscriber";
 
 const tradeRouter = express.Router();
+const redisSubscriber = new RedisSubscriber();
+
 
 // save no states here
 // we are just sending requests to the redis streams
@@ -99,10 +102,17 @@ tradeRouter.get("/balance/usd", auth, async (req: Request<{}, {}, {}, {email : s
 
     const id = Bun.randomUUIDv7();
     // Send payload to redis stream
-    await redisClient.xAdd(TRADE_STREAM, "*", {message : JSON.stringify({operation: Operations.GetBalanceUsd, id ,userEmail : validEmail})})
+    
+    await redisClient.xAdd(TRADE_STREAM, "*", { message: JSON.stringify({ operation: Operations.GetBalanceUsd, id, userEmail: validEmail }) })
 
+    try {
+        const result = await redisSubscriber.waitForMessage(id);
+        console.log("Getting result :", result);
+    } catch (error) {
+        console.log("Some error occured : ", error);
+    }
 
-    // const payloadResponse = await transactionWatch(id);
+    // const payloadResponse = await redisSubscriber(id);
     const payloadResponse = 20000;
 
     // If success

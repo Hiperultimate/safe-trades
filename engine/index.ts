@@ -156,6 +156,8 @@ async function main() {
 
         open_orders[email]?.push(openPosition);
       }
+
+      console.log(`CreateTrade result : ${id}`);
     }
 
     if (operationName === Operations.CloseTrade) {
@@ -233,6 +235,7 @@ async function main() {
         (order) => order.id !== id
       );
 
+      console.log(`CloseTrade result : ${id}`);
     }
 
     if (operationName === Operations.GetBalanceUsd) {
@@ -242,6 +245,7 @@ async function main() {
       await redisClient.xAdd(CALLBACK_QUEUE, "*", {
         message: JSON.stringify(payload),
       });
+      console.log(`GetBalanceUsd result : ${payload}`);
       continue;
     }
 
@@ -252,6 +256,7 @@ async function main() {
       await redisClient.xAdd(CALLBACK_QUEUE, "*", {
         message: JSON.stringify(payload),
       });
+      console.log(`GetBalance result : ${payload}`);
       continue;
     }
 
@@ -262,6 +267,7 @@ async function main() {
       await redisClient.xAdd(CALLBACK_QUEUE, "*", {
         message: JSON.stringify(payload),
       });
+      console.log(`SupportedAssets result : ${payload}`);
       continue;
     }
 
@@ -269,6 +275,7 @@ async function main() {
       const userEmail = operationPayload.userEmail;
       balance[userEmail] = { USD: { balance: 10_000, decimal: 0 } };
       open_orders[userEmail] = [];
+      console.log(`UserRegister : ${userEmail}`);
       continue;
     }
   }
