@@ -68,12 +68,14 @@ async function main() {
         }
 
         const positionSize = new Decimal(margin).mul(new Decimal(leverage));
-        const executionPrice = new Decimal(currentPrice.price)
+        const executionPrice = (new Decimal(currentPrice.price).div(new Decimal(10).pow(new Decimal(currentPrice.decimal))))
           .mul(new Decimal(1).plus(new Decimal(slippage).div(100))); // (currentPrice.price * (1 + (slippage / 100))) / currentPrice.decimal;
-        const quantity = new Decimal(positionSize).div(
+        let quantity = new Decimal(positionSize).div(
           new Decimal(executionPrice).toDP(currentPrice.decimal, Decimal.ROUND_DOWN)
         );
         const borrowed = positionSize.sub(new Decimal(margin));
+
+        quantity = quantity.mul(Decimal(10).pow(currentPrice.decimal));
 
         const openPosition = {
           id,
@@ -90,6 +92,8 @@ async function main() {
           createdAt: Date.now(),
         };
 
+        // console.log("Checking open position details : ", JSON.stringify(openPosition));
+
         // reduce the required amount
         // transfer the asset to balance[email][AssetName]
         balance[email] = {
@@ -98,11 +102,13 @@ async function main() {
           [asset]: {
             balance:
               balance[email]?.[asset] !== undefined ? 
-                quantity.mul(new Decimal(currentPrice.decimal).mul(Decimal(10).pow(currentPrice.decimal))).plus(new Decimal(balance[email][asset].balance)).toNumber() :
-                quantity.mul(new Decimal(currentPrice.decimal).mul(Decimal(10).pow(currentPrice.decimal))).toNumber(),
+                quantity.plus(new Decimal(balance[email][asset].balance)).toNumber() :
+                quantity.toNumber(),
             decimal: currentPrice.decimal
           }
         };
+
+        console.log(`Checking balance stored : ${JSON.stringify(balance[email])} : quantity = ${quantity.toNumber()}`);
 
         // Add it in open_orders array
         open_orders[email]?.push(openPosition);
@@ -114,9 +120,9 @@ async function main() {
         }
 
         const positionSize = new Decimal(margin).mul(new Decimal(leverage));
-        const executionPrice = new Decimal(currentPrice.price).mul(
-          new Decimal(1).minus(new Decimal(slippage).div(100))
-        );
+        const executionPrice = new Decimal(currentPrice.price)
+          .div(new Decimal(10).pow(new Decimal(currentPrice.decimal)))
+          .mul(new Decimal(1).minus(new Decimal(slippage).div(100)));
         const quantity = new Decimal(positionSize).div(executionPrice);
         const borrowed = new Decimal(positionSize).sub(new Decimal(margin));
 
@@ -176,7 +182,7 @@ async function main() {
       const {
         type,
         entryPrice,
-        quantity,
+        quantity : quantityND,
         margin,
         leverage,
         borrowed,
@@ -191,11 +197,15 @@ async function main() {
         return;
       }
 
+      const currentAssetPrice = currentPrice.price / (10 ** currentPrice.decimal);
+
       // Calculate the execution price considering slippage
       const executionPrice =
         type === "long"
-          ? currentPrice.price * (1 + slippage / 100)
-          : currentPrice.price * (1 - slippage / 100);
+          ? currentAssetPrice * (1 + slippage / 100)
+          : currentAssetPrice * (1 - slippage / 100);
+      
+      const quantity = quantityND / (10 ** currentPrice.decimal);
 
       // Calculate the PnL
       let pnl = 0;
@@ -212,22 +222,34 @@ async function main() {
         return;
       }
 
-      const newUsdBalance = userBalanceUsd.balance + pnl;
+      const totalAssetPrice = margin + pnl;
 
-      // Update the asset balance
-      const existingAssetBalance = balance[email]?.[asset]?.balance || 0;
-      const newAssetBalance =
-        existingAssetBalance - quantity * currentPrice.decimal;
+      // Asset Quantity is balance
+      const newUserBalanceUsd = type === "long" ? userBalanceUsd.balance + totalAssetPrice : userBalanceUsd.balance - totalAssetPrice;
+      const oldUserAssetBalance = balance[email]?.[asset]?.balance || 0;
+      const assetBalanceAfterTx = type === "long" ? oldUserAssetBalance - quantityND : oldUserAssetBalance + quantityND;
+      
+      console.log("Checking variable data : ", {
+        quantity,
+        pnl,
+        currentAssetPrice,
+        totalAssetPrice : totalAssetPrice,
+        oldUserAssetBalance : oldUserAssetBalance,
+        assetBalanceAfterTx : assetBalanceAfterTx,
+      });
 
       // Update the user's balances
       balance[email] = {
         ...balance[email],
-        USD: { balance: newUsdBalance, decimal: 0 },
+        USD: { balance: newUserBalanceUsd, decimal: 0 },
         [asset]: {
-          balance: newAssetBalance,
+          balance: assetBalanceAfterTx,
           decimal: currentPrice.decimal,
         },
       };
+
+      // console.log(`Checking balances : usd balance : ${newUsdBalance} : pnl : ${pnl} : existing : ${existingAssetBalance} : new balance : ${newAssetBalance}` )
+      console.log(`Checking balances : usd balance : ${newUserBalanceUsd} : pnl : ${pnl} ` )
 
       // Remove the closed position from open_orders
       if (!open_orders[email]) {
