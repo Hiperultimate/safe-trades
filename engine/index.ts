@@ -1,9 +1,10 @@
-import redisClient from "./redis/redisClient";
+import redisClient from "./dbClient/redisClient";
+import { LoadExistingState, SnapCurrentState } from "./snapshotting";
 import { balance, open_orders, prices } from "./store";
 import { CALLBACK_QUEUE, Operations, TRADE_STREAM } from "./types";
 import Decimal from "decimal.js";
 
-async function main() {
+async function runtime() {
   while (true) {
     // Go through all items being added in the redis stream
     const response = await redisClient.xRead(
@@ -298,4 +299,12 @@ async function main() {
   }
 }
 
+async function main() { 
+  await LoadExistingState();
+  runtime();
+
+  setInterval(SnapCurrentState, 15000);
+}
+
 main();
+
