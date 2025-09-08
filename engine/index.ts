@@ -1,4 +1,5 @@
 import redisClient from "./dbClient/redisClient";
+import { autoLiquidate } from "./liquidate";
 import { LoadExistingState, SnapCurrentState } from "./snapshotting";
 import { balance, open_orders, prices } from "./store";
 import { CALLBACK_QUEUE, Operations, TRADE_STREAM } from "./types";
@@ -45,6 +46,7 @@ async function runtime() {
             };
           }
         );
+        autoLiquidate();
         break;
       }
       case Operations.CreateTrade: {
@@ -70,9 +72,12 @@ async function runtime() {
           }
 
           const positionSize = new Decimal(margin).mul(new Decimal(leverage));
-          const executionPrice = new Decimal(currentPrice.price)
-            .div(new Decimal(10).pow(new Decimal(currentPrice.decimal)))
-            .mul(new Decimal(1).plus(new Decimal(slippage).div(100))); // (currentPrice.price * (1 + (slippage / 100))) / currentPrice.decimal;
+          // const executionPrice = new Decimal(currentPrice.price)
+          //   .div(new Decimal(10).pow(new Decimal(currentPrice.decimal)))
+          //   .mul(new Decimal(1).plus(new Decimal(slippage).div(100))); // (currentPrice.price * (1 + (slippage / 100))) / currentPrice.decimal;
+          const executionPrice = new Decimal(currentPrice.price).div(
+            new Decimal(10).pow(new Decimal(currentPrice.decimal))
+          );
           let quantity = new Decimal(positionSize).div(
             new Decimal(executionPrice).toDP(
               currentPrice.decimal,
@@ -118,6 +123,7 @@ async function runtime() {
 
           // Add it in open_orders array
           open_orders[email]?.push(openPosition);
+
         } else {
           // Write shorting logic
           if (userBalanceUsd === undefined || userBalanceUsd.balance < margin) {
@@ -126,9 +132,12 @@ async function runtime() {
           }
 
           const positionSize = new Decimal(margin).mul(new Decimal(leverage));
-          const executionPrice = new Decimal(currentPrice.price)
-            .div(new Decimal(10).pow(new Decimal(currentPrice.decimal)))
-            .mul(new Decimal(1).minus(new Decimal(slippage).div(100)));
+          // const executionPrice = new Decimal(currentPrice.price)
+          //   .div(new Decimal(10).pow(new Decimal(currentPrice.decimal)))
+          //   .mul(new Decimal(1).minus(new Decimal(slippage).div(100)));
+          const executionPrice = new Decimal(currentPrice.price).div(
+            new Decimal(10).pow(new Decimal(currentPrice.decimal))
+          );
           let quantity = new Decimal(positionSize).div(executionPrice);
           quantity = quantity.mul(Decimal(10).pow(currentPrice.decimal));
           const borrowed = new Decimal(positionSize).sub(new Decimal(margin));
@@ -215,11 +224,13 @@ async function runtime() {
         const currentAssetPrice =
           currentPrice.price / 10 ** currentPrice.decimal;
 
+        // REMOVE SLIPPAGE
         // Calculate the execution price considering slippage
-        const executionPrice =
-          type === "long"
-            ? currentAssetPrice * (1 + slippage / 100)
-            : currentAssetPrice * (1 - slippage / 100);
+        // const executionPrice =
+        //   type === "long"
+        //     ? currentAssetPrice * (1 + slippage / 100)
+        //     : currentAssetPrice * (1 - slippage / 100);
+        const executionPrice = currentAssetPrice;
 
         const quantity = quantityND / 10 ** currentPrice.decimal;
 
