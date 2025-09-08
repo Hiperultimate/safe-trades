@@ -48,9 +48,9 @@ tradeRouter.post("/trade/create", auth, async (req, res : Response<{ message: st
         id: string;
       };
       return res.status(200).send({ orderId : result.id });
-    } catch (error) {
-      console.log("Some error occured : ", error);
-        return res.status(400).send({message : "Transaction creation un-successful"})
+    } catch (error : any) {
+      console.log("Some error occurred:", error.message);
+      return res.status(400).send({ message: error.message });
     }
 })
 
@@ -84,11 +84,9 @@ tradeRouter.post("/trade/close", auth, async (req: Request<{}, {}, { id: string 
       };
         return res.status(200).send({ orderId: result.id });
         
-    } catch (error) {
-      console.log("Some error occured : ", error);
-      return res
-        .status(400)
-        .send({ message: "Transaction close un-successful" });
+    } catch (error : any) {
+      console.log("Some error occurred:", error.message);
+      return res.status(400).send({ message: error.message });
     }
 })
 
@@ -104,7 +102,7 @@ tradeRouter.get("/balance/usd", auth, async (req: Request<{}, {}, {}, {email : s
     const validEmail = zodValidation.data;
 
     if (!registeredEmails[validEmail]) {
-        res.status(400).send({ message: "Email not found..." });
+        return res.status(400).send({ message: "Email not found..." });
     }
 
     

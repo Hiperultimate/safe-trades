@@ -4,7 +4,7 @@ import { CALLBACK_QUEUE } from "./types";
 
 class RedisSubscriber {
   private redisClient: RedisClientType;
-  private callback: Record<string, () => void>;
+  private callback: Record<string, { resolve: () => void, reject: ({}) => void}>;
   private removeTimeout: Record<string, () => void>;
   private resolvePayload: Record<string, {}>;
   constructor() {
@@ -32,7 +32,11 @@ class RedisSubscriber {
       console.log("Show response : ", payload, cbId);
       if (response && cbId && this.callback[cbId]) {
         this.resolvePayload[cbId] = payload;
-        this.callback[cbId](); // resolving
+        if (payload.error) {
+          this.callback[cbId].reject(payload);
+        } else {
+          this.callback[cbId].resolve();
+        }
         delete this.callback[cbId];
         if (this.removeTimeout[cbId]) {
           this.removeTimeout[cbId]();
@@ -43,15 +47,13 @@ class RedisSubscriber {
   }
 
   async waitForMessage(id: string) {
-
     return new Promise((resolve, reject) => {
       function resolveCb( this : RedisSubscriber) {
         const returningPayload = this.resolvePayload[id];
         delete this.resolvePayload[id];
         return resolve(returningPayload);
       }
-      
-      this.callback[id] = resolveCb.bind(this);
+      this.callback[id] = { resolve: resolveCb.bind(this) , reject : reject};
       const timerRef = setTimeout(() => { 
         if (this.callback[id]) {
           reject({ message: "Time limit exceeded" });

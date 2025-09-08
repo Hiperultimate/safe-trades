@@ -60,6 +60,13 @@ async function runtime() {
         // Get current price of asset
         if (currentPrice === undefined) {
           console.log("Error, invalid asset name provided : ", asset);
+          await redisClient.xAdd(CALLBACK_QUEUE, "*", {
+            message: JSON.stringify({
+              error: true,
+              message: "Invalid asset",
+              id,
+            }),
+          });
           // send error notification through callback-queue
           break;
         }
@@ -131,6 +138,13 @@ async function runtime() {
           // Write shorting logic
           if (userBalanceUsd === undefined || userBalanceUsd.balance < margin) {
             console.error("Insufficient USD balance");
+            await redisClient.xAdd(CALLBACK_QUEUE, "*", {
+              message: JSON.stringify({
+                error: true,
+                message: "Insufficient user balance.",
+                id,
+              }),
+            });
             break;
           }
 
@@ -202,7 +216,13 @@ async function runtime() {
         );
         if (!getOrderDetails) {
           console.error("Unable to find order");
-          // send error through callback queue
+          await redisClient.xAdd(CALLBACK_QUEUE, "*", {
+            message: JSON.stringify({
+              error: true,
+              message: "Unable to find order",
+              id,
+            }),
+          });
           break;
         }
 
@@ -221,13 +241,19 @@ async function runtime() {
         const currentPrice = prices[asset];
         if (!currentPrice) {
           console.error("Invalid asset price");
+          await redisClient.xAdd(CALLBACK_QUEUE, "*", {
+            message: JSON.stringify({
+              error: true,
+              message: "Invalid asset price",
+              id,
+            }),
+          });
           break;
         }
 
         const currentAssetPrice =
           currentPrice.price / 10 ** currentPrice.decimal;
-
-        // REMOVE SLIPPAGE
+        
         // Calculate the execution price considering slippage
         // const executionPrice =
         //   type === "long"
@@ -249,6 +275,13 @@ async function runtime() {
         const userBalanceUsd = balance[email]?.USD;
         if (!userBalanceUsd) {
           console.error("User USD balance not found");
+          await redisClient.xAdd(CALLBACK_QUEUE, "*", {
+            message: JSON.stringify({
+              error: true,
+              message: "Something went wrong",
+              id,
+            }),
+          });
           break;
         }
 
