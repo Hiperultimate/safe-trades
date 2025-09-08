@@ -1,20 +1,20 @@
 {
-  "name": "price_pooler",
+  "name": "tests",
   "module": "index.ts",
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "bun index",
-    "test-instance" : "NODE_ENV=test bun index"
+    "dev" : "bun index",
+    "mockprice" : "bun mockPriceFeeder" 
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "@types/ws": "^8.18.1"
   },
   "peerDependencies": {
     "typescript": "^5"
   },
   "dependencies": {
-    "decimal.js": "^10.6.0",
-    "redis": "^5.8.2"
+    "ws": "^8.18.3"
   }
 }

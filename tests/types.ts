@@ -1,0 +1,1 @@
+export type IAssets = "SOL_USDC" | "ETH_USDC" | "BTC_USDC";
