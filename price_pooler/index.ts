@@ -1,10 +1,9 @@
 import redisClient from "./redisClient";
 import Decimal from "decimal.js";
 import { Operations, TRADE_STREAM, type IBookTickerResponse } from "./types";
+import env from "./env";
 
-// redisClient.pSubscribe()
-
-const ws = new WebSocket("wss://ws.backpack.exchange/");
+const ws = new WebSocket(env.NODE_ENV === "production" ? env.BACKPACK_WSS : env.TEST_WSS as string);
 
 const subscribetoken = {
   id: 1,
