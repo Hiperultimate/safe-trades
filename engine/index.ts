@@ -32,274 +32,281 @@ async function runtime() {
       continue;
     }
 
-    if (operationName === Operations.PriceUpdate) {
-      const newPrices = operationPayload.price_updates as [];
-      newPrices.forEach(
-        (assetDetail: { asset: string; price: number; decimal: number }) => {
-          prices[assetDetail.asset] = {
-            price: assetDetail.price,
-            decimal: assetDetail.decimal,
-          };
-        }
-      );
-      continue;
-    }
-
-    // Perform the required operation according to the operationName
-    if (operationName === Operations.CreateTrade) {
-      const { id, email, asset, type, margin, leverage, slippage } =
-        operationPayload;
-
-      const userBalanceUsd = balance[email]?.USD;
-      
-      const currentPrice = prices[asset];
-
-      // Get current price of asset
-      if (currentPrice === undefined) {
-        console.log("Error, invalid asset name provided : ", asset);
-        // send error notification through callback-queue
-        return;
-      }
-
-      if (type === "long") {
-        // Calculate required amount for the asset
-        if (userBalanceUsd === undefined || userBalanceUsd.balance < margin) {
-          console.error("Insufficient USD balance");
-          return; // handle error appropriately
-        }
-
-        const positionSize = new Decimal(margin).mul(new Decimal(leverage));
-        const executionPrice = (new Decimal(currentPrice.price).div(new Decimal(10).pow(new Decimal(currentPrice.decimal))))
-          .mul(new Decimal(1).plus(new Decimal(slippage).div(100))); // (currentPrice.price * (1 + (slippage / 100))) / currentPrice.decimal;
-        let quantity = new Decimal(positionSize).div(
-          new Decimal(executionPrice).toDP(currentPrice.decimal, Decimal.ROUND_DOWN)
-        );
-        const borrowed = positionSize.sub(new Decimal(margin));
-
-        quantity = quantity.mul(Decimal(10).pow(currentPrice.decimal));
-
-        const openPosition = {
-          id,
-          owner: email,
-          asset,
-          type,
-          entryPrice: executionPrice.toNumber(),
-          quantity: quantity.toNumber(),
-          margin,
-          leverage,
-          positionSize: positionSize.toNumber(),
-          borrowed: borrowed.toNumber(),
-          slippage,
-          createdAt: Date.now(),
-        };
-
-        // console.log("Checking open position details : ", JSON.stringify(openPosition));
-
-        // reduce the required amount
-        // transfer the asset to balance[email][AssetName]
-        balance[email] = {
-          ...balance[email],
-          USD: { balance: userBalanceUsd.balance - margin, decimal: 0 },
-          [asset]: {
-            balance:
-              balance[email]?.[asset] !== undefined ? 
-                quantity.plus(new Decimal(balance[email][asset].balance)).toNumber() :
-                quantity.toNumber(),
-            decimal: currentPrice.decimal
+    switch (operationName) {
+      case Operations.PriceUpdate: {
+        const newPrices = operationPayload.price_updates as [];
+        newPrices.forEach(
+          (assetDetail: { asset: string; price: number; decimal: number }) => {
+            prices[assetDetail.asset] = {
+              price: assetDetail.price,
+              decimal: assetDetail.decimal,
+            };
           }
-        };
+        );
+        break;
+      }
+      case Operations.CreateTrade: {
+        const { id, email, asset, type, margin, leverage, slippage } =
+          operationPayload;
 
-        // Add it in open_orders array
-        open_orders[email]?.push(openPosition);
-      } else {
-        // Write shorting logic
-        if (userBalanceUsd === undefined || userBalanceUsd.balance < margin) {
-          console.error("Insufficient USD balance");
+        const userBalanceUsd = balance[email]?.USD;
+
+        const currentPrice = prices[asset];
+
+        // Get current price of asset
+        if (currentPrice === undefined) {
+          console.log("Error, invalid asset name provided : ", asset);
+          // send error notification through callback-queue
           return;
         }
 
-        const positionSize = new Decimal(margin).mul(new Decimal(leverage));
-        const executionPrice = new Decimal(currentPrice.price)
-          .div(new Decimal(10).pow(new Decimal(currentPrice.decimal)))
-          .mul(new Decimal(1).minus(new Decimal(slippage).div(100)));
-        let quantity = new Decimal(positionSize).div(executionPrice);
-        quantity = quantity.mul(Decimal(10).pow(currentPrice.decimal));
-        const borrowed = new Decimal(positionSize).sub(new Decimal(margin));
+        if (type === "long") {
+          // Calculate required amount for the asset
+          if (userBalanceUsd === undefined || userBalanceUsd.balance < margin) {
+            console.error("Insufficient USD balance");
+            return; // handle error appropriately
+          }
 
+          const positionSize = new Decimal(margin).mul(new Decimal(leverage));
+          const executionPrice = new Decimal(currentPrice.price)
+            .div(new Decimal(10).pow(new Decimal(currentPrice.decimal)))
+            .mul(new Decimal(1).plus(new Decimal(slippage).div(100))); // (currentPrice.price * (1 + (slippage / 100))) / currentPrice.decimal;
+          let quantity = new Decimal(positionSize).div(
+            new Decimal(executionPrice).toDP(
+              currentPrice.decimal,
+              Decimal.ROUND_DOWN
+            )
+          );
+          const borrowed = positionSize.sub(new Decimal(margin));
 
-        const openPosition = {
-          id,
-          owner: email,
-          asset,
+          quantity = quantity.mul(Decimal(10).pow(currentPrice.decimal));
+
+          const openPosition = {
+            id,
+            owner: email,
+            asset,
+            type,
+            entryPrice: executionPrice.toNumber(),
+            quantity: quantity.toNumber(),
+            margin,
+            leverage,
+            positionSize: positionSize.toNumber(),
+            borrowed: borrowed.toNumber(),
+            slippage,
+            createdAt: Date.now(),
+          };
+
+          // console.log("Checking open position details : ", JSON.stringify(openPosition));
+
+          // reduce the required amount
+          // transfer the asset to balance[email][AssetName]
+          balance[email] = {
+            ...balance[email],
+            USD: { balance: userBalanceUsd.balance - margin, decimal: 0 },
+            [asset]: {
+              balance:
+                balance[email]?.[asset] !== undefined
+                  ? quantity
+                      .plus(new Decimal(balance[email][asset].balance))
+                      .toNumber()
+                  : quantity.toNumber(),
+              decimal: currentPrice.decimal,
+            },
+          };
+
+          // Add it in open_orders array
+          open_orders[email]?.push(openPosition);
+        } else {
+          // Write shorting logic
+          if (userBalanceUsd === undefined || userBalanceUsd.balance < margin) {
+            console.error("Insufficient USD balance");
+            return;
+          }
+
+          const positionSize = new Decimal(margin).mul(new Decimal(leverage));
+          const executionPrice = new Decimal(currentPrice.price)
+            .div(new Decimal(10).pow(new Decimal(currentPrice.decimal)))
+            .mul(new Decimal(1).minus(new Decimal(slippage).div(100)));
+          let quantity = new Decimal(positionSize).div(executionPrice);
+          quantity = quantity.mul(Decimal(10).pow(currentPrice.decimal));
+          const borrowed = new Decimal(positionSize).sub(new Decimal(margin));
+
+          const openPosition = {
+            id,
+            owner: email,
+            asset,
+            type,
+            entryPrice: executionPrice.toNumber(),
+            quantity: quantity.toNumber(),
+            margin,
+            leverage,
+            positionSize: positionSize.toNumber(),
+            borrowed: borrowed.toNumber(),
+            slippage,
+            createdAt: Date.now(),
+          };
+
+          const newUsdBalance = new Decimal(userBalanceUsd.balance)
+            .sub(new Decimal(margin))
+            .toNumber();
+
+          const existingAssetBalance = new Decimal(
+            balance[email]?.[asset]?.balance ?? 0
+          );
+          // existingAssetQty - qty * (10 ** 4)
+          const newAssetBalance = existingAssetBalance.sub(quantity).toNumber();
+
+          balance[email] = {
+            ...balance[email],
+            USD: { balance: newUsdBalance, decimal: 0 },
+            [asset]: {
+              balance: newAssetBalance,
+              decimal: currentPrice.decimal,
+            },
+          };
+
+          open_orders[email]?.push(openPosition);
+        }
+
+        await redisClient.xAdd(CALLBACK_QUEUE, "*", {
+          message: JSON.stringify({ id }),
+        });
+        console.log(`CreateTrade result : ${id}`);
+        break;
+      }
+      case Operations.CloseTrade: {
+        const { id, email } = operationPayload;
+
+        const getOrderDetails = open_orders[email]?.find(
+          (order) => order.id === id
+        );
+        if (!getOrderDetails) {
+          console.error("Unable to find order");
+          // send error through callback queue
+          return;
+        }
+
+        const {
           type,
-          entryPrice: executionPrice.toNumber(),
-          quantity: quantity.toNumber(),
+          entryPrice,
+          quantity: quantityND,
           margin,
           leverage,
-          positionSize: positionSize.toNumber(),
-          borrowed: borrowed.toNumber(),
+          borrowed,
           slippage,
-          createdAt: Date.now(),
-        };
+          asset,
+          createdAt,
+        } = getOrderDetails;
 
-        const newUsdBalance = new Decimal(userBalanceUsd.balance)
-          .sub(new Decimal(margin))
-          .toNumber();
+        const currentPrice = prices[asset];
+        if (!currentPrice) {
+          console.error("Invalid asset price");
+          return;
+        }
 
-        const existingAssetBalance = new Decimal(
-          balance[email]?.[asset]?.balance ?? 0
-        );
-        // existingAssetQty - qty * (10 ** 4)
-        const newAssetBalance = existingAssetBalance.sub(quantity).toNumber();
+        const currentAssetPrice =
+          currentPrice.price / 10 ** currentPrice.decimal;
 
+        // Calculate the execution price considering slippage
+        const executionPrice =
+          type === "long"
+            ? currentAssetPrice * (1 + slippage / 100)
+            : currentAssetPrice * (1 - slippage / 100);
+
+        const quantity = quantityND / 10 ** currentPrice.decimal;
+
+        // Calculate the PnL
+        let pnl = 0;
+        if (type === "long") {
+          pnl = (executionPrice - entryPrice) * quantity * leverage;
+        } else {
+          pnl = (entryPrice - executionPrice) * quantity * leverage;
+        }
+
+        // Update the USD balance
+        const userBalanceUsd = balance[email]?.USD;
+        if (!userBalanceUsd) {
+          console.error("User USD balance not found");
+          return;
+        }
+
+        const totalAssetPrice = margin + pnl;
+
+        // Asset Quantity is balance
+        const newUserBalanceUsd = userBalanceUsd.balance + totalAssetPrice;
+        const oldUserAssetBalance = balance[email]?.[asset]?.balance || 0;
+        const assetBalanceAfterTx =
+          type === "long"
+            ? oldUserAssetBalance - quantityND
+            : oldUserAssetBalance + quantityND;
+
+        // Update the user's balances
         balance[email] = {
           ...balance[email],
-          USD: { balance: newUsdBalance, decimal: 0 },
+          USD: { balance: newUserBalanceUsd, decimal: 0 },
           [asset]: {
-            balance: newAssetBalance,
+            balance: assetBalanceAfterTx,
             decimal: currentPrice.decimal,
           },
         };
 
-        open_orders[email]?.push(openPosition);
+        // Remove the closed position from open_orders
+        if (!open_orders[email]) {
+          console.log(`Orders for user ${email} not found`);
+          return;
+        }
+        open_orders[email] = open_orders[email]?.filter(
+          (order) => order.id !== id
+        );
+
+        console.log(`CloseTrade result : ${id}`);
+        await redisClient.xAdd(CALLBACK_QUEUE, "*", {
+          message: JSON.stringify({ id }),
+        });
+        break;
       }
-
-      await redisClient.xAdd(CALLBACK_QUEUE, "*", {
-        message: JSON.stringify({ id }),
-      });
-      console.log(`CreateTrade result : ${id}`);
-    }
-
-    if (operationName === Operations.CloseTrade) {
-      const { id, email } = operationPayload;
-
-      const getOrderDetails = open_orders[email]?.find(order => order.id === id);
-      if (!getOrderDetails) {
-        console.error("Unable to find order");
-        // send error through callback queue
-        return
+      case Operations.GetBalanceUsd: {
+        const { userEmail, id } = operationPayload;
+        // Get userEmail's balance and stream it to redis streams CALLBACK_QUEUE
+        const payload = { id, balance: { USD: balance[userEmail]?.USD } };
+        await redisClient.xAdd(CALLBACK_QUEUE, "*", {
+          message: JSON.stringify(payload),
+        });
+        console.log(`GetBalanceUsd result : ${payload}`);
+        break;
       }
-
-      const {
-        type,
-        entryPrice,
-        quantity : quantityND,
-        margin,
-        leverage,
-        borrowed,
-        slippage,
-        asset,
-        createdAt,
-      } = getOrderDetails;
-
-      const currentPrice = prices[asset];
-      if (!currentPrice) {
-        console.error("Invalid asset price");
-        return;
+      case Operations.GetBalance: {
+        const { userEmail, id } = operationPayload;
+        // Get userEmail's balance and stream it to redis streams CALLBACK_QUEUE
+        const payload = { id, balance: balance[userEmail] };
+        await redisClient.xAdd(CALLBACK_QUEUE, "*", {
+          message: JSON.stringify(payload),
+        });
+        console.log(`GetBalance result : ${JSON.stringify(payload)}`);
+        break;
       }
-
-      const currentAssetPrice = currentPrice.price / (10 ** currentPrice.decimal);
-
-      // Calculate the execution price considering slippage
-      const executionPrice =
-        type === "long"
-          ? currentAssetPrice * (1 + slippage / 100)
-          : currentAssetPrice * (1 - slippage / 100);
-      
-      const quantity = quantityND / (10 ** currentPrice.decimal);
-
-      // Calculate the PnL
-      let pnl = 0;
-      if (type === "long") {
-        pnl = (executionPrice - entryPrice) * quantity * leverage;
-      } else{
-        pnl = (entryPrice - executionPrice) * quantity * leverage;
+      case Operations.SupportedAssets: {
+        const { id } = operationPayload;
+        const assetNames = Object.keys(prices);
+        const payload = { id, assets: assetNames };
+        await redisClient.xAdd(CALLBACK_QUEUE, "*", {
+          message: JSON.stringify(payload),
+        });
+        console.log(`SupportedAssets result : ${payload}`);
+        break;
       }
-
-      // Update the USD balance
-      const userBalanceUsd = balance[email]?.USD;
-      if (!userBalanceUsd) {
-        console.error("User USD balance not found");
-        return;
+      case Operations.UserRegister: {
+        const userEmail = operationPayload.userEmail;
+        balance[userEmail] = { USD: { balance: 10_000, decimal: 0 } };
+        open_orders[userEmail] = [];
+        console.log(`UserRegister : ${userEmail}`);
+        break;
       }
-
-      const totalAssetPrice = margin + pnl;
-
-      // Asset Quantity is balance
-      const newUserBalanceUsd = userBalanceUsd.balance + totalAssetPrice;
-      const oldUserAssetBalance = balance[email]?.[asset]?.balance || 0;
-      const assetBalanceAfterTx = type === "long" ? oldUserAssetBalance - quantityND : oldUserAssetBalance + quantityND;
-      
-      // Update the user's balances
-      balance[email] = {
-        ...balance[email],
-        USD: { balance: newUserBalanceUsd, decimal: 0 },
-        [asset]: {
-          balance: assetBalanceAfterTx,
-          decimal: currentPrice.decimal,
-        },
-      };
-
-
-      // Remove the closed position from open_orders
-      if (!open_orders[email]) {
-        console.log(`Orders for user ${email} not found`);
-        return;
-      }
-      open_orders[email] = open_orders[email]?.filter(
-        (order) => order.id !== id
-      );
-
-      console.log(`CloseTrade result : ${id}`);
-      await redisClient.xAdd(CALLBACK_QUEUE, "*", {
-        message: JSON.stringify({ id }),
-      });
-    }
-
-    if (operationName === Operations.GetBalanceUsd) {
-      const { userEmail, id } = operationPayload;
-      // Get userEmail's balance and stream it to redis streams CALLBACK_QUEUE
-      const payload = { id, balance: { USD: balance[userEmail]?.USD } };
-      await redisClient.xAdd(CALLBACK_QUEUE, "*", {
-        message: JSON.stringify(payload),
-      });
-      console.log(`GetBalanceUsd result : ${payload}`);
-      continue;
-    }
-
-    if (operationName === Operations.GetBalance) {
-      const { userEmail, id } = operationPayload;
-      // Get userEmail's balance and stream it to redis streams CALLBACK_QUEUE
-      const payload = { id, balance: balance[userEmail] };
-      await redisClient.xAdd(CALLBACK_QUEUE, "*", {
-        message: JSON.stringify(payload),
-      });
-      console.log(`GetBalance result : ${JSON.stringify(payload)}`);
-      continue;
-    }
-
-    if (operationName === Operations.SupportedAssets) {
-      const { id } = operationPayload;
-      const assetNames = Object.keys(prices);
-      const payload = { id, assets: assetNames };
-      await redisClient.xAdd(CALLBACK_QUEUE, "*", {
-        message: JSON.stringify(payload),
-      });
-      console.log(`SupportedAssets result : ${payload}`);
-      continue;
-    }
-
-    if (operationName === Operations.UserRegister) {
-      const userEmail = operationPayload.userEmail;
-      balance[userEmail] = { USD: { balance: 10_000, decimal: 0 } };
-      open_orders[userEmail] = [];
-      console.log(`UserRegister : ${userEmail}`);
-      continue;
     }
   }
 }
 
-async function main() { 
+async function main() {
   await LoadExistingState();
   runtime();
 
@@ -307,4 +314,3 @@ async function main() {
 }
 
 main();
-

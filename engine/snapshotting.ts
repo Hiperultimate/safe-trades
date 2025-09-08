@@ -18,7 +18,7 @@ export async function SnapCurrentState() {
     };
 
     await collection.insertOne(stateDocument);
-    console.log("Current state saved to database.");
+    console.log("Snapshotting current state");
   } catch (error) {
     console.log(
       "Something went wrong while creating snapshot, check connection with mongoDB"
