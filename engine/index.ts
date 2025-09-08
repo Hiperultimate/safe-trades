@@ -61,14 +61,17 @@ async function runtime() {
         if (currentPrice === undefined) {
           console.log("Error, invalid asset name provided : ", asset);
           // send error notification through callback-queue
-          return;
+          break;
         }
 
         if (type === "long") {
           // Calculate required amount for the asset
           if (userBalanceUsd === undefined || userBalanceUsd.balance < margin) {
             console.error("Insufficient USD balance");
-            return; // handle error appropriately
+            await redisClient.xAdd(CALLBACK_QUEUE, "*", {
+              message: JSON.stringify({ error: true, message: "Insufficient user balance.", id }),
+            });
+            break; // handle error appropriately
           }
 
           const positionSize = new Decimal(margin).mul(new Decimal(leverage));
@@ -128,7 +131,7 @@ async function runtime() {
           // Write shorting logic
           if (userBalanceUsd === undefined || userBalanceUsd.balance < margin) {
             console.error("Insufficient USD balance");
-            return;
+            break;
           }
 
           const positionSize = new Decimal(margin).mul(new Decimal(leverage));
@@ -200,7 +203,7 @@ async function runtime() {
         if (!getOrderDetails) {
           console.error("Unable to find order");
           // send error through callback queue
-          return;
+          break;
         }
 
         const {
@@ -218,7 +221,7 @@ async function runtime() {
         const currentPrice = prices[asset];
         if (!currentPrice) {
           console.error("Invalid asset price");
-          return;
+          break;
         }
 
         const currentAssetPrice =
@@ -246,7 +249,7 @@ async function runtime() {
         const userBalanceUsd = balance[email]?.USD;
         if (!userBalanceUsd) {
           console.error("User USD balance not found");
-          return;
+          break;
         }
 
         const totalAssetPrice = margin + pnl;
@@ -272,7 +275,7 @@ async function runtime() {
         // Remove the closed position from open_orders
         if (!open_orders[email]) {
           console.log(`Orders for user ${email} not found`);
-          return;
+          break;
         }
         open_orders[email] = open_orders[email]?.filter(
           (order) => order.id !== id
