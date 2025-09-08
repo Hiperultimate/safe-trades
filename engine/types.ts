@@ -20,6 +20,7 @@ export type IPosition = {
   quantity: number;
   margin: number;
   leverage: number;
+  autoLiquidatePrice: number;
   positionSize: number;
   borrowed: number;
   slippage: number;

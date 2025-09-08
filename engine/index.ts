@@ -4,6 +4,8 @@ import { balance, open_orders, prices } from "./store";
 import { CALLBACK_QUEUE, Operations, TRADE_STREAM } from "./types";
 import Decimal from "decimal.js";
 
+const LIQUIDATION_THRESHOLD = 0.1 // 10%
+
 async function runtime() {
   while (true) {
     // Go through all items being added in the redis stream
@@ -81,6 +83,9 @@ async function runtime() {
 
           quantity = quantity.mul(Decimal(10).pow(currentPrice.decimal));
 
+          const liquidationPrice = executionPrice.mul(new Decimal(1).minus(new Decimal(1).div(new Decimal(leverage))))
+          const autoLiquidatePrice = liquidationPrice.mul(new Decimal(1).add(new Decimal(LIQUIDATION_THRESHOLD)))
+
           const openPosition = {
             id,
             owner: email,
@@ -90,16 +95,13 @@ async function runtime() {
             quantity: quantity.toNumber(),
             margin,
             leverage,
+            autoLiquidatePrice : autoLiquidatePrice.toNumber(),
             positionSize: positionSize.toNumber(),
             borrowed: borrowed.toNumber(),
             slippage,
             createdAt: Date.now(),
           };
 
-          // console.log("Checking open position details : ", JSON.stringify(openPosition));
-
-          // reduce the required amount
-          // transfer the asset to balance[email][AssetName]
           balance[email] = {
             ...balance[email],
             USD: { balance: userBalanceUsd.balance - margin, decimal: 0 },
@@ -131,6 +133,10 @@ async function runtime() {
           quantity = quantity.mul(Decimal(10).pow(currentPrice.decimal));
           const borrowed = new Decimal(positionSize).sub(new Decimal(margin));
 
+
+          const liquidationPrice = executionPrice.mul(new Decimal(1).plus(new Decimal(1).div(new Decimal(leverage))))
+          const autoLiquidatePrice = liquidationPrice.mul(new Decimal(1).add(new Decimal(LIQUIDATION_THRESHOLD)))
+
           const openPosition = {
             id,
             owner: email,
@@ -138,6 +144,7 @@ async function runtime() {
             type,
             entryPrice: executionPrice.toNumber(),
             quantity: quantity.toNumber(),
+            autoLiquidatePrice: autoLiquidatePrice.toNumber(),
             margin,
             leverage,
             positionSize: positionSize.toNumber(),
@@ -174,6 +181,7 @@ async function runtime() {
         console.log(`CreateTrade result : ${id}`);
         break;
       }
+        
       case Operations.CloseTrade: {
         const { id, email } = operationPayload;
 
