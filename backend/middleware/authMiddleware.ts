@@ -11,7 +11,7 @@ interface PartialAuthenticatedRequest extends Request {
 }
 
 const auth = (req: PartialAuthenticatedRequest, res: Response, next: NextFunction) => {
-  const { auth_token } = req.headers;
+  const auth_token : string | undefined = req.cookies.auth_token;
   if (!auth_token || typeof auth_token !== "string") {
     return res.status(400).send({ message: "Invalid authentication" });
   }

@@ -90,8 +90,9 @@ tradeRouter.post("/trade/close", auth, async (req: Request<{}, {}, { id: string 
     }
 })
 
-tradeRouter.get("/balance/usd", auth, async (req: Request<{}, {}, {}, {email : string}>, res: Response<{ message: string } | {balance : number}>) => {
-    const { email } = req.query;
+tradeRouter.get("/balance/usd", auth, async (req, res: Response<{ message: string } | {balance : number}>) => {
+    const typedReq = req as AuthenticatedRequest;
+    const email = typedReq.userEmail;
     const zodValidation = z.email().safeParse(email);
 
     if (!zodValidation.success) {
@@ -127,8 +128,9 @@ tradeRouter.get("/balance/usd", auth, async (req: Request<{}, {}, {}, {email : s
     }
 });
 
-tradeRouter.get("/balance", auth, async (req: Request<{}, {}, {}, { email: string }>, res) => {
-    const { email } = req.query;
+tradeRouter.get("/balance", auth, async (req, res) => {
+    const typedReq = req as AuthenticatedRequest;
+    const email = typedReq.userEmail;
     const zodValidation = z.email().safeParse(email);
 
     if (!zodValidation.success) {
